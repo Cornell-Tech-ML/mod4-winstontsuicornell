@@ -1,5 +1,4 @@
-"""
-Description:
+"""Description:
 Note: Make sure that both the new and old module files are in same directory!
 
 This script helps you sync your previous module works with current modules.
