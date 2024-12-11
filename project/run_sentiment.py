@@ -35,21 +35,23 @@ class Conv1d(minitorch.Module):
 
     def forward(self, input):
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
+        output = minitorch.fast_conv.conv1d(input, self.weights.value)
+        return output + self.bias.value
 
 
 class CNNSentimentKim(minitorch.Module):
     """
-    Implement a CNN for Sentiment classification based on Y. Kim 2014.
+    CNN for Sentiment Classification based on Y. Kim 2014.
 
-    This model should implement the following procedure:
-
-    1. Apply a 1d convolution with input_channels=embedding_dim
-        feature_map_size=100 output channels and [3, 4, 5]-sized kernels
-        followed by a non-linear activation function (the paper uses tanh, we apply a ReLu)
-    2. Apply max-over-time across each feature map
-    3. Apply a Linear to size C (number of classes) followed by a ReLU and Dropout with rate 25%
-    4. Apply a sigmoid over the class dimension.
+    Procedure:
+    1. Apply a 1D convolution for kernel sizes [3, 4, 5].
+       Each convolution outputs `feature_map_size` channels.
+       Apply ReLU activation after each convolution.
+    2. Perform max-over-time pooling across the feature maps.
+    3. Sum the pooled outputs from all convolution layers.
+    4. Pass the aggregated features through a fully connected layer.
+    5. Apply dropout during training and sigmoid activation for classification.
     """
 
     def __init__(
@@ -61,15 +63,53 @@ class CNNSentimentKim(minitorch.Module):
     ):
         super().__init__()
         self.feature_map_size = feature_map_size
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        self.dropout = dropout
+
+        # Initialize convolutional layers for each kernel size
+        self.layer1 = Conv1d(embedding_size, feature_map_size, filter_sizes[0])
+        self.layer2 = Conv1d(embedding_size, feature_map_size, filter_sizes[1])
+        self.layer3 = Conv1d(embedding_size, feature_map_size, filter_sizes[2])
+
+        # Fully connected layer
+        self.layer4 = Linear(feature_map_size, 1)
 
     def forward(self, embeddings):
         """
-        embeddings tensor: [batch x sentence length x embedding dim]
+        Forward pass for the CNN model.
+
+        Arguments:
+        embeddings -- Input tensor of shape [batch_size, sentence_length, embedding_dim].
+
+        Returns:
+        logits -- Output tensor of shape [batch_size].
         """
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # Permute embeddings to [batch, embedding_dim, sentence_length]
+        embeddings = embeddings.permute(0, 2, 1)
+
+        # Apply convolutional layers with ReLU activation
+        fmap_3 = self.layer1(embeddings).relu()
+        fmap_4 = self.layer2(embeddings).relu()
+        fmap_5 = self.layer3(embeddings).relu()
+
+        # Perform max-over-time pooling
+        pooled_3 = minitorch.nn.max(fmap_3, dim=2)
+        pooled_4 = minitorch.nn.max(fmap_4, dim=2)
+        pooled_5 = minitorch.nn.max(fmap_5, dim=2)
+
+        # Aggregate pooled features by summing
+        max_out = pooled_3 + pooled_4 + pooled_5
+
+        # Pass aggregated features through the fully connected layer
+        logits = self.layer4(max_out.view(max_out.shape[0], max_out.shape[1]))
+
+        # Apply dropout for regularization during training
+        logits = minitorch.nn.dropout(logits, self.dropout, not self.training)
+
+        # Apply sigmoid activation for binary classification
+        probabilities = logits.sigmoid()
+
+        return probabilities.view(embeddings.shape[0])
+
 
 
 # Evaluation helper methods

@@ -42,7 +42,9 @@ class Conv2d(minitorch.Module):
 
     def forward(self, input):
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
+        return minitorch.conv2d(input, self.weights.value) + self.bias.value
+
 
 
 class Network(minitorch.Module):
@@ -61,18 +63,69 @@ class Network(minitorch.Module):
     """
 
     def __init__(self):
+        """
+        Initialize the CNN network for MNIST classification.
+        Architecture:
+        - Two Conv2d layers with ReLU activation.
+        - Average pooling layer.
+        - Two fully connected layers with ReLU and dropout.
+        - LogSoftmax output layer.
+        """
         super().__init__()
 
-        # For vis
+        # For visualization of intermediate activations
         self.mid = None
         self.out = None
 
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # Define layers
+        self.conv1 = Conv2d(in_channels=1, out_channels=4, kh=3, kw=3)
+        self.conv2 = Conv2d(in_channels=4, out_channels=8, kh=3, kw=3)
+        self.linear1 = Linear(in_size=392, out_size=64)
+        self.linear2 = Linear(in_size=64, out_size=10)
 
-    def forward(self, x):
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # Dropout rate
+        self.dropout_rate = 0.25
+
+    def forward(self, x: minitorch.Tensor) -> minitorch.Tensor:
+        """
+        Forward pass of the network.
+
+        Args:
+            x (minitorch.Tensor): Input tensor of shape [batch_size, channels, height, width].
+
+        Returns:
+            minitorch.Tensor: Log probabilities for each class.
+        """
+        batch_num, channels, height, width = x.shape
+        assert height == H and width == W, "Input tensor has incorrect height or width."
+
+        # First convolutional layer with ReLU
+        self.mid = self.conv1(x).relu()
+
+        # Second convolutional layer with ReLU
+        self.out = self.conv2(self.mid).relu()
+
+        # Pooling and flattening
+        pooled = minitorch.avgpool2d(self.out, (4, 4))
+        assert pooled.shape == (batch_num, 8, 7, 7), "Pooling output has unexpected shape."
+        flattened = pooled.view(batch_num, 392)
+
+        # First fully connected layer with ReLU
+        hidden = self.linear1(flattened).relu()
+
+        # Apply dropout during training
+        if self.training:
+            hidden = minitorch.dropout(hidden, self.dropout_rate)
+
+        # Final classification layer with LogSoftmax
+        logits = self.linear2(hidden)
+        output = minitorch.logsoftmax(logits, dim=1)
+
+        # Ensure no NaN values in output
+        assert len([ele for ele in output._tensor._storage if ele != ele]) == 0, "Output contains NaN values."
+
+        return output
+
 
 
 def make_mnist(start, stop):
